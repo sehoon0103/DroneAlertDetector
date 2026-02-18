@@ -1,0 +1,20 @@
+name: Static Analysis
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  cppcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install cppcheck
+        run: sudo apt-get update && sudo apt-get install -y cppcheck
+      # Source is a validated IAR EWARM project (builds/debugs clean there).
+      # Only fail CI on cppcheck's "error" class findings (real defects);
+      # style/warning-level nits are reported but non-blocking.
+      - name: Run cppcheck
+        run: cppcheck --suppress=missingInclude --error-exitcode=1 .
