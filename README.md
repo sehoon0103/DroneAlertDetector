@@ -1,4 +1,4 @@
-# DroneAlertDetector (RTOS STM32 Emergency Alert)
+# DroneAlertDetector (uC/OS-II STM32 Emergency Alert)
 
 RTOS(uC/OS-II) 기반 STM32 키트에서 가변저항(고도 모사) 입력을 실시간 모니터링하여
 임계값 이하 시 LED/BUZZER 경고 + GLCD 상태 표시, 스위치/통신으로 해제·초기화가 가능한
