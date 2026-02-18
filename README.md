@@ -66,7 +66,8 @@ RTOS(uC/OS-II) 기반 STM32 키트에서 가변저항(고도 모사) 입력을 �
 
 ## References (근거/검증용)
 
-- Final Report (PDF): (레포에 PDF가 있으면 링크 추가)
+- Final Report (PDF)
 - 핵심 키워드/구조 근거:
   - uC/OS-II 초기화/시작(OSInit/OSStart), Task 생성, SysTick 1ms
   - ADC 기반 입력, GLCD 표시, UART 통신, MBox, GLCD Semaphore
+  - https://github.com/sehoon0103/DroneAlertDetector/blob/main/Final%20report   //pdf_link
