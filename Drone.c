@@ -240,10 +240,6 @@ void Task3(void *data)                              // Task3: 고도 값 기준 
       } else {
          LED_OFF(3);                                // LED3 끄기
 
-         OSSemPend(GLcdSem, 0, &err);               // GLCD 세마포어 획득
-         GLCD_xy(4, 6);
-         printf("WARNING ");
-         OSSemPost(GLcdSem);                        // GLCD 세마포어 반환
       }
 
       OSMboxPost(Tx3Mbox, (void *)&count);          // Task4로 메시지 전달
