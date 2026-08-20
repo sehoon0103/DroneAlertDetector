@@ -6,14 +6,6 @@
 *********************************************************************************************************
 */
 #define     TASK_STK_SIZE      OS_TASK_DEF_STK_SIZE   // 각 작업(Task)의 스택 크기를 설정
-#define     N_TASKS             5                    // 생성할 작업 수
-
-#define     TASK_START_ID       0                     // 시작 작업(TaskStart)의 ID
-#define     TASK_1_ID           1                     // 작업 1(Task1)의 ID
-#define     TASK_2_ID           2                     // 작업 2(Task2)의 ID
-#define     TASK_3_ID           3                     // 작업 3(Task3)의 ID
-#define     TASK_4_ID           4                     // 작업 4(Task4)의 ID
-#define     TASK_5_ID           5                     // 작업 5(Task5)의 ID
 
 #define     TASK_START_PRIO    10                     // 시작 작업(TaskStart)의 우선순위
 #define     TASK_1_PRIO        11                     // 작업 1(Task1)의 우선순위
@@ -117,6 +109,10 @@ void TaskStart (void *pdata)                  // TaskStart 함수 정의. 시스
    OSStatInit();                             // 운영체제 상태 통계 정보 초기화 함수 호출.
    Sync = OSSemCreate(0);                    // 세마포어 생성. 초기 값 0. 작업 간 동기화를 위해 사용.
    GLcdSem = OSSemCreate(1);                 // 세마포어 생성. 초기 값 1. GLCD 접근 동기화를 위해 사용.
+   Tx1Mbox = OSMboxCreate((void *)0);        // Task1->Task2 체인용 메일박스 생성.
+   Tx2Mbox = OSMboxCreate((void *)0);        // Task2->Task3 체인용 메일박스 생성.
+   Tx3Mbox = OSMboxCreate((void *)0);        // Task3->Task4 체인용 메일박스 생성.
+   Tx4Mbox = OSMboxCreate((void *)0);        // Task4->Task5 체인용 메일박스 생성.
    CommInit();                               // 통신 초기화 함수 호출. 시리얼 통신 등 하드웨어 설정 수행.
    
    OSTaskCreate(Task1, (void *)0, (void *)&Task1Stk[TASK_STK_SIZE - 1], TASK_1_PRIO);
@@ -157,9 +153,9 @@ void Task1(void *data)                              // Task1: 고도 값 기준 
 
       if (count > 9999) count = 0;                  // 카운터가 9999 초과하면 초기화
 
-      if (ADCConvertedValue[2] > 2000)             // 고도가 임계값 이상일 경우
+      if (ADCConvertedValue[2] > 2000 && led_state) // 고도가 임계값 이상이고 COMPLETE 상태가 아닐 경우
          LED_ON(1);                                 // LED1 켜기
-      else 
+      else
          LED_OFF(1);                                // LED1 끄기
       
       uint32_t sum = ADCConvertedValue[2] + ADCConvertedValue[3]; // 두 가변저항(ADC) 합산 값 계산
@@ -199,7 +195,8 @@ void Task2(void *data)                              // Task2: 고도 값 기준 
       uint32_t sum = ADCConvertedValue[2] + ADCConvertedValue[3]; // 두 가변저항(ADC) 합산 값 계산
             if (sum >= 4000 && sum < 6000) {         // 합산 값이 WARNING 범위인지 확인
                 GLCD_xy(4, 6); printf("WARNING ");   // GLCD에 WARNING 상태 출력
-                LED_ON(2);                           // LED2 켜기
+                if (led_state)                       // COMPLETE 상태가 아닐 때만 점등
+                    LED_ON(2);                        // LED2 켜기
             }
             else if(sum > 1 && sum < 4000 )          // 합산 값이 NORMAL 범위로 내려왔는지 확인
                 LED_OFF(2);                                // LED1 끄기
@@ -220,13 +217,15 @@ void Task2(void *data)                              // Task2: 고도 값 기준 
 void Task3(void *data)                              // Task3: 고도 값 기준 경고 상태 판별(danger)
 {
    INT8U err;                                       // OS 에러 코드 저장 변수
+   int *rxmsg;                                      // Task2에서 전달된 메시지 수신 포인터
    int count = 0;                                   // Task4로 전달할 데이터(현재는 0 고정)
    data = data;                                     // 매개변수 사용 방지 경고 제거
 
    for (;;) {
+      rxmsg = (int *)OSMboxPend(Tx2Mbox, 0, &err);  // Task2에서 메시지 수신
       uint32_t sum = ADCConvertedValue[2] + ADCConvertedValue[3]; // 두 가변저항(ADC) 합산 값 계산
 
-      if (sum >= 6000 && sum < 8000) {              // 합산 값이 DANGER 범위인지 확인
+      if (sum >= 6000) {                            // 합산 값이 DANGER 범위(상한 없음, 최댓값까지 포함) 확인
          LED_ON(3);                                 // LED3 켜기
 
          OSSemPend(GLcdSem, 0, &err);               // GLCD 세마포어 획득
@@ -234,9 +233,11 @@ void Task3(void *data)                              // Task3: 고도 값 기준 
          printf("DANGER ");
          OSSemPost(GLcdSem);                        // GLCD 세마포어 반환
 
-         GPIO_SetBits(GPIOD, GPIO_Pin_15);          // 부저 켜기
-         OSTimeDlyHMSM(0, 0, 0, 500);               // 500ms 동안 부저 울림
-         GPIO_ResetBits(GPIOD, GPIO_Pin_15);        // 부저 끄기
+         if (buzzer_state) {                        // UART '!'로 COMPLETE 처리된 이후에는 부저 억제
+            GPIO_SetBits(GPIOD, GPIO_Pin_15);        // 부저 켜기
+            OSTimeDlyHMSM(0, 0, 0, 500);             // 500ms 동안 부저 울림
+            GPIO_ResetBits(GPIOD, GPIO_Pin_15);      // 부저 끄기
+         }
       } else {
          LED_OFF(3);                                // LED3 끄기
 
